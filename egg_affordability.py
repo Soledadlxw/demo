@@ -93,6 +93,89 @@ EGG_PRICES_USD_PER_DOZEN: dict[str, float] = {
     "Pakistan": 1.40,
 }
 
+# 国家/地区中文名
+COUNTRY_NAMES_ZH: dict[str, str] = {
+    "Switzerland": "瑞士",
+    "Australia": "澳大利亚",
+    "New Zealand": "新西兰",
+    "Norway": "挪威",
+    "Uruguay": "乌拉圭",
+    "Czechia": "捷克",
+    "Belgium": "比利时",
+    "Sweden": "瑞典",
+    "Denmark": "丹麦",
+    "Austria": "奥地利",
+    "UK": "英国",
+    "Hong Kong": "中国香港",
+    "Ireland": "爱尔兰",
+    "USA": "美国",
+    "Italy": "意大利",
+    "Germany": "德国",
+    "Greece": "希腊",
+    "Israel": "以色列",
+    "Ghana": "加纳",
+    "France": "法国",
+    "Slovakia": "斯洛伐克",
+    "Lithuania": "立陶宛",
+    "Latvia": "拉脱维亚",
+    "Chile": "智利",
+    "Romania": "罗马尼亚",
+    "Poland": "波兰",
+    "Hungary": "匈牙利",
+    "Finland": "芬兰",
+    "Spain": "西班牙",
+    "Puerto Rico": "波多黎各",
+    "Portugal": "葡萄牙",
+    "Morocco": "摩洛哥",
+    "Netherlands": "荷兰",
+    "Croatia": "克罗地亚",
+    "South Africa": "南非",
+    "Mexico": "墨西哥",
+    "South Korea": "韩国",
+    "Colombia": "哥伦比亚",
+    "Japan": "日本",
+    "Slovenia": "斯洛文尼亚",
+    "Canada": "加拿大",
+    "UA Emirates": "阿联酋",
+    "Ivory Coast": "科特迪瓦",
+    "Nigeria": "尼日利亚",
+    "Singapore": "新加坡",
+    "Peru": "秘鲁",
+    "Jordan": "约旦",
+    "Serbia": "塞尔维亚",
+    "Thailand": "泰国",
+    "Malaysia": "马来西亚",
+    "Turkey": "土耳其",
+    "Brazil": "巴西",
+    "Saudi Arabia": "沙特阿拉伯",
+    "Tanzania": "坦桑尼亚",
+    "Ecuador": "厄瓜多尔",
+    "China": "中国",
+    "Russia": "俄罗斯",
+    "Cameroon": "喀麦隆",
+    "Philippines": "菲律宾",
+    "Kuwait": "科威特",
+    "Vietnam": "越南",
+    "Ukraine": "乌克兰",
+    "Paraguay": "巴拉圭",
+    "Domin. Rep.": "多米尼加",
+    "Tunisia": "突尼斯",
+    "Costa Rica": "哥斯达黎加",
+    "India": "印度",
+    "Uganda": "乌干达",
+    "Guatemala": "危地马拉",
+    "Kenya": "肯尼亚",
+    "Zambia": "赞比亚",
+    "Bolivia": "玻利维亚",
+    "Azerbaijan": "阿塞拜疆",
+    "Indonesia": "印度尼西亚",
+    "Kazakhstan": "哈萨克斯坦",
+    "Egypt": "埃及",
+    "Sri Lanka": "斯里兰卡",
+    "Bangladesh": "孟加拉国",
+    "Pakistan": "巴基斯坦",
+}
+
 # 鸡蛋价格国家名 → 最低工资表国家名
 COUNTRY_ALIASES: dict[str, str] = {
     "USA": "United States",
@@ -137,6 +220,13 @@ class AffordabilityRow:
     wage_per_jin_ratio: float
     jin_per_hour: float
     wage_source: str
+
+
+def format_country_name(country: str) -> str:
+    zh = COUNTRY_NAMES_ZH.get(country)
+    if zh:
+        return f"{zh} {country}"
+    return country
 
 
 def dozen_to_jin_price(dozen_usd: float) -> float:
@@ -198,7 +288,7 @@ def build_ranking() -> tuple[list[AffordabilityRow], list[str]]:
     for country, dozen_usd in EGG_PRICES_USD_PER_DOZEN.items():
         hourly, source = resolve_hourly_wage(country, wage_dict)
         if hourly is None:
-            excluded.append(f"{country}（{source}）")
+            excluded.append(f"{format_country_name(country)}（{source}）")
             continue
 
         jin_price = dozen_to_jin_price(dozen_usd)
@@ -229,7 +319,7 @@ def format_table(rows: list[AffordabilityRow]) -> str:
     ]
     for row in rows:
         lines.append(
-            f"| {row.rank} | {row.country} | {row.hourly_wage_usd:.2f} | "
+            f"| {row.rank} | {format_country_name(row.country)} | {row.hourly_wage_usd:.2f} | "
             f"{row.egg_dozen_usd:.2f} | {row.egg_per_jin_usd:.3f} | "
             f"{row.wage_per_jin_ratio:.2f} | {row.jin_per_hour:.2f} |"
         )
