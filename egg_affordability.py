@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""全球鸡蛋购买力排名：按「每小时最低工资 ÷ 每斤鸡蛋价格」排序。"""
+"""全球鸡蛋购买力排名：按「中位数月工资 ÷ 每斤鸡蛋价格」排序。"""
 
 from __future__ import annotations
 
@@ -176,7 +176,7 @@ COUNTRY_NAMES_ZH: dict[str, str] = {
     "Pakistan": "巴基斯坦",
 }
 
-# 鸡蛋价格国家名 → 最低工资表国家名
+# 鸡蛋价格国家名 → 最低工资/工资表国家名
 COUNTRY_ALIASES: dict[str, str] = {
     "USA": "United States",
     "UK": "United Kingdom",
@@ -184,6 +184,119 @@ COUNTRY_ALIASES: dict[str, str] = {
     "UA Emirates": "United Arab Emirates",
     "Domin. Rep.": "Dominican Republic",
     "Ivory Coast": "Côte d'Ivoire",
+    "Hong Kong": "Hong Kong SAR, China",
+}
+
+# 平均工资表反向映射（Wikipedia 国家名 → 鸡蛋表键名）
+AVG_WAGE_REVERSE: dict[str, str] = {
+    "United States": "USA",
+    "United Kingdom": "UK",
+    "Czech Republic": "Czechia",
+    "Hong Kong SAR, China": "Hong Kong",
+}
+
+# 中位数月工资，美元（各国统计局/CEIC 中位数收入，近年数据）
+MEDIAN_MONTHLY_USD: dict[str, float] = {
+    "Switzerland": 6955,
+    "Australia": 3896,
+    "New Zealand": 4050,
+    "Norway": 5974,
+    "Uruguay": 2509,
+    "Czechia": 2506,
+    "Belgium": 4409,
+    "Sweden": 5707,
+    "Denmark": 7344,
+    "Austria": 3429,
+    "UK": 4047,
+    "Hong Kong": 2531,
+    "Ireland": 4710,
+    "USA": 5133,
+    "Italy": 4277,
+    "Germany": 6174,
+    "Greece": 1821,
+    "Israel": 4611,
+    "Ghana": 242,
+    "France": 3300,
+    "Slovakia": 2024,
+    "Lithuania": 2940,
+    "Latvia": 2289,
+    "Romania": 2246,
+    "Poland": 2611,
+    "Hungary": 2305,
+    "Finland": 4948,
+    "Spain": 2801,
+    "Portugal": 1438,
+    "Netherlands": 2994,
+    "Croatia": 2377,
+    "South Africa": 1660,
+    "Mexico": 1142,
+    "South Korea": 3350,
+    "Japan": 1999,
+    "Slovenia": 3081,
+    "Canada": 3922,
+    "Singapore": 4970,
+    "Peru": 650,
+    "Jordan": 777,
+    "Serbia": 1613,
+    "Thailand": 442,
+    "Malaysia": 898,
+    "Brazil": 658,
+    "Saudi Arabia": 1012,
+    "Ecuador": 444,
+    "China": 1438,
+    "Russia": 1352,
+    "Vietnam": 399,
+    "Ukraine": 693,
+    "Paraguay": 527,
+    "Kenya": 540,
+    "Zambia": 211,
+    "Bolivia": 728,
+    "Azerbaijan": 677,
+    "Indonesia": 187,
+    "Kazakhstan": 782,
+    "Egypt": 140,
+    "Pakistan": 140,
+    "Colombia": 259,
+    "UA Emirates": 2028,
+    "Chile": 900,
+    "Puerto Rico": 1600,
+    "Morocco": 320,
+    "Ivory Coast": 150,
+    "Nigeria": 150,
+    "Tanzania": 120,
+    "Cameroon": 140,
+    "Philippines": 300,
+    "Kuwait": 2000,
+    "Domin. Rep.": 400,
+    "Tunisia": 280,
+    "Costa Rica": 700,
+    "India": 250,
+    "Uganda": 70,
+    "Guatemala": 450,
+    "Sri Lanka": 180,
+    "Bangladesh": 120,
+    "Turkey": 850,
+}
+
+# 平均工资补充（月 gross，美元），Wikipedia 未收录的国家
+SUPPLEMENTAL_AVG_MONTHLY_USD: dict[str, float] = {
+    "Chile": 1200,
+    "Puerto Rico": 2000,
+    "Morocco": 400,
+    "Ivory Coast": 200,
+    "Nigeria": 200,
+    "Tanzania": 150,
+    "Cameroon": 180,
+    "Philippines": 380,
+    "Kuwait": 2500,
+    "Domin. Rep.": 500,
+    "Tunisia": 350,
+    "Costa Rica": 900,
+    "India": 350,
+    "Uganda": 90,
+    "Guatemala": 550,
+    "Sri Lanka": 220,
+    "Bangladesh": 150,
 }
 
 # 无法定全国统一最低工资时的补充数据（小时工资，美元）
@@ -202,24 +315,32 @@ SUPPLEMENTAL_HOURLY_WAGES: dict[str, tuple[float, str]] = {
     "Kazakhstan": (1.15, "全国最低工资 KZT 85000/月"),
 }
 
+# 缺少官方中位数时，用平均工资估算的中位数比例
+MEDIAN_TO_MEAN_RATIO = 0.82
+
 # M 号鸡蛋约 53g；1 斤 = 500g
 EGG_WEIGHT_G = 53
 DOZEN_COUNT = 12
 JIN_GRAMS = 500
 
-WIKI_URL = "https://en.wikipedia.org/wiki/List_of_minimum_wages_by_country"
+WIKI_MIN_WAGE_URL = "https://en.wikipedia.org/wiki/List_of_minimum_wages_by_country"
+WIKI_AVG_WAGE_URL = "https://en.wikipedia.org/wiki/List_of_countries_by_average_wage"
 
 
 @dataclass
 class AffordabilityRow:
     rank: int
     country: str
-    hourly_wage_usd: float
+    median_monthly_usd: float
+    avg_monthly_usd: float
+    min_hourly_usd: float | None
     egg_dozen_usd: float
     egg_per_jin_usd: float
-    wage_per_jin_ratio: float
-    jin_per_hour: float
-    wage_source: str
+    median_per_jin_ratio: float
+    min_hourly_per_jin_ratio: float | None
+    median_jin_per_month: float
+    min_jin_per_hour: float | None
+    wage_notes: str
 
 
 def format_country_name(country: str) -> str:
@@ -234,9 +355,9 @@ def dozen_to_jin_price(dozen_usd: float) -> float:
     return dozen_usd / (grams_per_dozen / JIN_GRAMS)
 
 
-def fetch_wikipedia_wages() -> dict[str, float]:
+def fetch_wikipedia_min_wages() -> dict[str, float]:
     headers = {"User-Agent": "Mozilla/5.0 (compatible; EggAffordability/1.0)"}
-    response = requests.get(WIKI_URL, headers=headers, timeout=30)
+    response = requests.get(WIKI_MIN_WAGE_URL, headers=headers, timeout=30)
     response.raise_for_status()
     tables = pd.read_html(StringIO(response.text))
     wages = tables[2].copy()
@@ -256,7 +377,27 @@ def fetch_wikipedia_wages() -> dict[str, float]:
     return dict(zip(wages["country"], wages["hourly_nominal"]))
 
 
-def resolve_hourly_wage(
+def fetch_wikipedia_avg_wages() -> dict[str, float]:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; EggAffordability/1.0)"}
+    response = requests.get(WIKI_AVG_WAGE_URL, headers=headers, timeout=30)
+    response.raise_for_status()
+    tables = pd.read_html(StringIO(response.text))
+    avg = tables[1].copy()
+    avg.columns = ["country", "monthly_usd", "year"]
+    avg["country"] = (
+        avg["country"].str.replace("\u202f", "", regex=False).str.replace("*", "", regex=False).str.strip()
+    )
+    avg["monthly_usd"] = pd.to_numeric(avg["monthly_usd"], errors="coerce")
+    result: dict[str, float] = {}
+    for country, monthly in zip(avg["country"], avg["monthly_usd"]):
+        if pd.isna(monthly):
+            continue
+        key = AVG_WAGE_REVERSE.get(country, country)
+        result[key] = float(monthly)
+    return result
+
+
+def resolve_hourly_min_wage(
     egg_country: str, wage_dict: dict[str, float]
 ) -> tuple[float | None, str]:
     wage_country = COUNTRY_ALIASES.get(egg_country, egg_country)
@@ -267,46 +408,88 @@ def resolve_hourly_wage(
 
     if wage_country in SUPPLEMENTAL_HOURLY_WAGES:
         value, note = SUPPLEMENTAL_HOURLY_WAGES[wage_country]
-        return value, f"补充数据：{note}"
+        return value, f"补充：{note}"
 
     if egg_country in SUPPLEMENTAL_HOURLY_WAGES:
         value, note = SUPPLEMENTAL_HOURLY_WAGES[egg_country]
-        return value, f"补充数据：{note}"
+        return value, f"补充：{note}"
 
-    # UAE 等无法定最低工资的国家
     if wage_country == "United Arab Emirates":
         return None, "无法定最低工资"
 
-    return None, "缺少工资数据"
+    return None, "缺少最低工资数据"
+
+
+def resolve_wages(
+    country: str, avg_dict: dict[str, float]
+) -> tuple[float, float, str]:
+    median = MEDIAN_MONTHLY_USD.get(country)
+    average = avg_dict.get(country) or SUPPLEMENTAL_AVG_MONTHLY_USD.get(country)
+    notes: list[str] = []
+
+    if median is not None and average is not None:
+        if country in SUPPLEMENTAL_AVG_MONTHLY_USD:
+            notes.append("中位数：CEIC/各国统计局/ILO")
+            notes.append("平均：ILO/各国统计局补充")
+        else:
+            notes.append("中位数：CEIC/各国统计局")
+            notes.append("平均：Wikipedia UNECE")
+    elif median is not None:
+        average = median / MEDIAN_TO_MEAN_RATIO
+        notes.append("中位数：CEIC/各国统计局/ILO")
+        notes.append("平均：由中位数估算")
+    elif average is not None:
+        median = average * MEDIAN_TO_MEAN_RATIO
+        notes.append("平均：Wikipedia UNECE/补充")
+        notes.append("中位数：由平均估算")
+    else:
+        raise ValueError("缺少工资数据")
+
+    return round(median, 2), round(average, 2), "；".join(notes)
 
 
 def build_ranking() -> tuple[list[AffordabilityRow], list[str]]:
-    wage_dict = fetch_wikipedia_wages()
+    min_wage_dict = fetch_wikipedia_min_wages()
+    avg_dict = fetch_wikipedia_avg_wages()
     rows: list[AffordabilityRow] = []
     excluded: list[str] = []
 
     for country, dozen_usd in EGG_PRICES_USD_PER_DOZEN.items():
-        hourly, source = resolve_hourly_wage(country, wage_dict)
-        if hourly is None:
-            excluded.append(f"{format_country_name(country)}（{source}）")
+        try:
+            median_monthly, avg_monthly, wage_notes = resolve_wages(country, avg_dict)
+        except ValueError:
+            excluded.append(f"{format_country_name(country)}（缺少中位数/平均工资）")
             continue
 
+        min_hourly, min_note = resolve_hourly_min_wage(country, min_wage_dict)
         jin_price = dozen_to_jin_price(dozen_usd)
-        ratio = hourly / jin_price
+        median_ratio = median_monthly / jin_price
+        min_ratio = min_hourly / jin_price if min_hourly is not None else None
+
+        full_notes = wage_notes
+        if min_hourly is None:
+            full_notes += f"；最低工资：{min_note}"
+        else:
+            full_notes += "；最低工资：Wikipedia/补充"
+
         rows.append(
             AffordabilityRow(
                 rank=0,
                 country=country,
-                hourly_wage_usd=hourly,
+                median_monthly_usd=median_monthly,
+                avg_monthly_usd=avg_monthly,
+                min_hourly_usd=min_hourly,
                 egg_dozen_usd=dozen_usd,
                 egg_per_jin_usd=round(jin_price, 3),
-                wage_per_jin_ratio=round(ratio, 2),
-                jin_per_hour=round(ratio, 2),
-                wage_source=source,
+                median_per_jin_ratio=round(median_ratio, 1),
+                min_hourly_per_jin_ratio=round(min_ratio, 2) if min_ratio else None,
+                median_jin_per_month=round(median_ratio, 1),
+                min_jin_per_hour=round(min_ratio, 2) if min_ratio else None,
+                wage_notes=full_notes,
             )
         )
 
-    rows.sort(key=lambda r: r.wage_per_jin_ratio, reverse=True)
+    rows.sort(key=lambda r: r.median_per_jin_ratio, reverse=True)
     for i, row in enumerate(rows, start=1):
         row.rank = i
     return rows, excluded
@@ -314,14 +497,20 @@ def build_ranking() -> tuple[list[AffordabilityRow], list[str]]:
 
 def format_table(rows: list[AffordabilityRow]) -> str:
     lines = [
-        "| 排名 | 国家/地区 | 时薪(USD) | 鸡蛋/打(USD) | 鸡蛋/斤(USD) | 时薪÷斤价 | 每小时可买(斤) |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| 排名 | 国家/地区 | 中位数工资(月USD) | 平均工资(月USD) | 最低工资(时USD) | "
+        "鸡蛋/打(USD) | 鸡蛋/斤(USD) | 中位数÷斤价 | 最低时薪÷斤价 |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
+        min_hourly = f"{row.min_hourly_usd:.2f}" if row.min_hourly_usd is not None else "—"
+        min_ratio = (
+            f"{row.min_hourly_per_jin_ratio:.2f}" if row.min_hourly_per_jin_ratio is not None else "—"
+        )
         lines.append(
-            f"| {row.rank} | {format_country_name(row.country)} | {row.hourly_wage_usd:.2f} | "
+            f"| {row.rank} | {format_country_name(row.country)} | "
+            f"{row.median_monthly_usd:.0f} | {row.avg_monthly_usd:.0f} | {min_hourly} | "
             f"{row.egg_dozen_usd:.2f} | {row.egg_per_jin_usd:.3f} | "
-            f"{row.wage_per_jin_ratio:.2f} | {row.jin_per_hour:.2f} |"
+            f"{row.median_per_jin_ratio:.1f} | {min_ratio} |"
         )
     return "\n".join(lines)
 
@@ -337,14 +526,17 @@ def main() -> None:
 
     header = """# 全球鸡蛋购买力排名
 
-按 **每小时最低工资 ÷ 每斤鸡蛋价格** 降序排列。数值越高，表示最低工资能买到的鸡蛋越多。
+按 **中位数月工资 ÷ 每斤鸡蛋价格** 降序排列。数值越高，表示中位数工资能买到的鸡蛋越多。
 
 ## 计算方法
 
-- 鸡蛋价格：12 枚 M 号鸡蛋（约 53g/枚）的零售价，美元/打（[GlobalProductPrices](https://www.globalproductprices.com/rankings/egg_prices/)，2026 年 1 月）
-- 每斤价格：1 斤 = 500g，由打价换算
-- 最低工资：以 [Wikipedia](https://en.wikipedia.org/wiki/List_of_minimum_wages_by_country) 法定时薪为主；北欧等无全国统一最低工资的国家使用行业下限估算
-- **时薪÷斤价** = 每小时最低工资可购买的鸡蛋斤数
+- **鸡蛋价格**：12 枚 M 号鸡蛋（约 53g/枚）零售价，美元/打（[GlobalProductPrices](https://www.globalproductprices.com/rankings/egg_prices/)，2026 年 1 月）
+- **每斤价格**：1 斤 = 500g，由打价换算
+- **平均工资**：月 gross 平均工资，美元（[Wikipedia UNECE](https://en.wikipedia.org/wiki/List_of_countries_by_average_wage)）
+- **中位数工资**：月 gross 中位数工资，美元（各国统计局 / CEIC 中位数收入）
+- **最低工资**：法定时薪，美元（[Wikipedia](https://en.wikipedia.org/wiki/List_of_minimum_wages_by_country)）
+- **中位数÷斤价** = 中位数月工资可购买的鸡蛋斤数（每月）
+- **最低时薪÷斤价** = 最低时薪可购买的鸡蛋斤数（每小时）；无法定最低工资标为 —
 
 """
     excluded_note = ""
